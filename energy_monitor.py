@@ -30,7 +30,7 @@ SMARD_API = "https://www.smard.de/nip/download/market-data"
 OPSD_API = "https://data.open-power-system-data.org/household_data/latest/"
 
 # Fallback: Generate realistic German prices
-USE_GERMAN_TEST_DATA = False  # Set to True for offline demo
+USE_GERMAN_TEST_DATA = True  # ✅ SET TO TRUE FOR DEMO (generates realistic prices)
 
 # Price Thresholds (in €/MWh - German electricity market)
 PRICE_BUY_THRESHOLD = 50        # Below this = "BUY" (€/MWh)
