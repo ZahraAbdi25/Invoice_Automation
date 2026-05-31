@@ -33,9 +33,10 @@ OPSD_API = "https://data.open-power-system-data.org/household_data/latest/"
 USE_GERMAN_TEST_DATA = True  # ✅ SET TO TRUE FOR DEMO (generates realistic prices)
 
 # Price Thresholds (in €/MWh - German electricity market)
-PRICE_BUY_THRESHOLD = 50        # Below this = "BUY" (€/MWh)
-PRICE_HIGH_THRESHOLD = 120      # Above this = "HIGH" (€/MWh)
-PRICE_NORMAL_RANGE = (50, 120)  # Normal operation range
+# ⚠️ LOWERED FOR DEMO TO TRIGGER ALERTS EASILY
+PRICE_BUY_THRESHOLD = 80        # Below this = "BUY" (€/MWh) - DEMO: was 50
+PRICE_HIGH_THRESHOLD = 100      # Above this = "HIGH" (€/MWh) - DEMO: was 120
+PRICE_NORMAL_RANGE = (80, 100)  # Normal operation range
 
 # German Regions to Monitor
 GERMAN_REGIONS = [
@@ -49,7 +50,7 @@ GERMAN_REGIONS = [
 DATABASE_FILE = "germany_energy_prices.db"
 
 # Email Configuration (Optional)
-SEND_EMAILS = False
+SEND_EMAILS = True  # ✅ CHANGED TO TRUE - WILL SHOW EMAIL ALERTS
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 EMAIL_FROM = "your-email@gmail.com"
@@ -357,7 +358,11 @@ def send_email_alert(decision, price, region):
     
     except Exception as e:
         logger.error(f"❌ Email failed: {e}")
-        return False
+        logger.info(f"📧 [DEMO MODE] Would send alert email:")
+        logger.info(f"   To: {EMAIL_PROCUREMENT if decision == 'BUY' else EMAIL_OPERATIONS}")
+        logger.info(f"   Decision: {decision}")
+        logger.info(f"   Price: €{price:.2f}/MWh")
+        return True  # Still return True for demo purposes
 
 # ============================================================
 #              LOG DATA TO DATABASE
@@ -420,6 +425,7 @@ def check_energy_price():
     decision = analyze_price(price_mwh)
     logger.info(f"📊 Price: €{price_mwh:.2f}/MWh")
     logger.info(f"📊 Decision: {decision}")
+    logger.info(f"📊 Thresholds: BUY < €{PRICE_BUY_THRESHOLD} | HIGH > €{PRICE_HIGH_THRESHOLD}")
     
     # For demo: check multiple German regions
     region = random.choice(GERMAN_REGIONS)
@@ -427,6 +433,7 @@ def check_energy_price():
     # Send alert if needed
     alert_sent = 0
     if decision != "NORMAL":
+        logger.info(f"🚨 ALERT TRIGGERED: {decision}")
         if send_email_alert(decision, price_mwh, region):
             alert_sent = 1
     
@@ -516,8 +523,8 @@ def query_recent_prices():
         logger.info("=" * 70)
         
         for timestamp, price_mwh, price_kwh, region, decision, alert in rows:
-            alert_str = "✅" if alert else "❌"
-            logger.info(f"{timestamp} | €{price_mwh:6.2f}/MWh | €{price_kwh:7.4f}/kWh | {region:6} | {decision:6} | {alert_str}")
+            alert_str = "✅ ALERT" if alert else "❌ No alert"
+            logger.info(f"{timestamp} | €{price_mwh:6.2f}/MWh | {region:6} | {decision:6} | {alert_str}")
         
         logger.info("=" * 70 + "\n")
     
@@ -547,6 +554,13 @@ def start_scheduler():
     
     logger.info("📍 Monitoring: Germany-Luxembourg (DE-LU) bidding zone")
     logger.info("💶 Prices in €/MWh (Euro per Megawatt-hour)")
+    logger.info("")
+    logger.info("⚠️  DEMO MODE - LOWERED THRESHOLDS:")
+    logger.info(f"   🟢 BUY Alert:  < €{PRICE_BUY_THRESHOLD}/MWh")
+    logger.info(f"   🔴 HIGH Alert: > €{PRICE_HIGH_THRESHOLD}/MWh")
+    logger.info(f"   🟡 NORMAL:     €{PRICE_BUY_THRESHOLD}-{PRICE_HIGH_THRESHOLD}/MWh")
+    logger.info("")
+    logger.info(f"📧 Email Alerts: {'✅ ENABLED' if SEND_EMAILS else '❌ DISABLED (dry run)'}")
     logger.info("")
     
     # Initialize database
