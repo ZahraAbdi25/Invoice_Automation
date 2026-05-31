@@ -16,17 +16,13 @@ from email.mime.multipart import MIMEMultipart
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
 import random
-import xml.etree.ElementTree as ET
 
 # ============================================================
 #                    CONFIGURATION
 # ============================================================
 
 # German Electricity Data Sources (No API key required!)
-# Source 1: SMARD.de - German Government Energy Data
 SMARD_API = "https://www.smard.de/nip/download/market-data"
-
-# Source 2: Open Power System Data (Public/Free)
 OPSD_API = "https://data.open-power-system-data.org/household_data/latest/"
 
 # Fallback: Generate realistic German prices
@@ -110,89 +106,6 @@ def init_database():
         return False
 
 # ============================================================
-#         FETCH REAL GERMAN ELECTRICITY PRICES
-# ============================================================
-
-def fetch_german_price_smard():
-    """
-    Fetch real German electricity prices from SMARD.de
-    (Bundesnetzagentur - German Federal Network Agency)
-    Data: Spot market prices in €/MWh
-    """
-    try:
-        logger.info("📡 Fetching from SMARD.de (German government data)...")
-        
-        # SMARD provides Day-Ahead prices
-        # Region: 4169 = Germany-Luxembourg
-        url = "https://www.smard.de/nip/download/market-data"
-        params = {
-            "region": "4169",  # Germany-Luxembourg
-            "from": (datetime.now() - timedelta(days=1)).strftime("%Y%m%d0000"),
-            "to": datetime.now().strftime("%Y%m%d2300"),
-        }
-        
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        
-        # Parse the CSV/JSON response
-        data = response.json() if response.headers.get('content-type') == 'application/json' else None
-        
-        if data and 'values' in data:
-            # Get latest price
-            latest_price = data['values'][-1][1]  # Second column is price
-            price_mwh = float(latest_price)
-            
-            logger.info(f"✅ Real German price from SMARD: €{price_mwh:.2f}/MWh")
-            return price_mwh
-        else:
-            logger.warning("⚠️  Could not parse SMARD response, trying fallback...")
-            return None
-    
-    except requests.exceptions.Timeout:
-        logger.warning("⚠️  SMARD API timeout")
-        return None
-    except requests.exceptions.ConnectionError:
-        logger.warning("⚠️  SMARD API unavailable")
-        return None
-    except Exception as e:
-        logger.warning(f"⚠️  SMARD fetch failed: {e}")
-        return None
-
-# ============================================================
-#    FETCH FROM OPEN POWER SYSTEM DATA (Public/Free)
-# ============================================================
-
-def fetch_german_price_opsd():
-    """
-    Fetch real German electricity data from Open Power System Data
-    Public source - no authentication required
-    """
-    try:
-        logger.info("📡 Fetching from Open Power System Data...")
-        
-        url = "https://data.open-power-system-data.org/household_data/latest/timeseries_60min_singleindex.csv"
-        
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        
-        # Parse CSV response - extract electricity price column
-        lines = response.text.strip().split('\n')
-        if len(lines) > 1:
-            # Get the last row (most recent)
-            last_row = lines[-1].split(',')
-            # Electricity price is typically in column index
-            price_mwh = float(last_row[1])  # Adjust index based on actual CSV
-            
-            logger.info(f"✅ Real German price from OPSD: €{price_mwh:.2f}/MWh")
-            return price_mwh
-        
-        return None
-    
-    except Exception as e:
-        logger.warning(f"⚠️  OPSD fetch failed: {e}")
-        return None
-
-# ============================================================
 #      GENERATE REALISTIC GERMAN TEST PRICES
 # ============================================================
 
@@ -200,11 +113,6 @@ def generate_realistic_german_price():
     """
     Generate realistic German electricity prices
     Mimics actual German market behavior
-    
-    Real German prices typically range:
-    - Off-peak: €30-80/MWh
-    - Normal: €60-120/MWh
-    - Peak/Crisis: €150-500/MWh (rare)
     """
     
     # Simulate market patterns
@@ -244,21 +152,6 @@ def fetch_current_price():
     if USE_GERMAN_TEST_DATA:
         logger.info("🧪 Using test data mode (realistic German prices)")
         return generate_realistic_german_price()
-    
-    # Option 2: Try real data sources
-    logger.info("=" * 60)
-    logger.info("⚡ FETCHING REAL GERMAN ELECTRICITY PRICE")
-    logger.info("=" * 60)
-    
-    # Try SMARD first
-    price = fetch_german_price_smard()
-    if price:
-        return price
-    
-    # Try OPSD second
-    price = fetch_german_price_opsd()
-    if price:
-        return price
     
     # Fallback to realistic test data
     logger.info("📊 Using realistic German market simulation (fallback)")
