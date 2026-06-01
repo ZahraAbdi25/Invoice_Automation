@@ -8,11 +8,9 @@ No API key required - uses public data sources
 import requests
 import sqlite3
 import json
-import smtplib
 import logging
+import os
 from datetime import datetime, timedelta
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
 import random
@@ -30,9 +28,9 @@ USE_GERMAN_TEST_DATA = True  # ✅ SET TO TRUE FOR DEMO (generates realistic pri
 
 # Price Thresholds (in €/MWh - German electricity market)
 # ⚠️ LOWERED FOR DEMO TO TRIGGER ALERTS EASILY
-PRICE_BUY_THRESHOLD = 80        # Below this = "BUY" (€/MWh) - DEMO: was 50
-PRICE_HIGH_THRESHOLD = 100      # Above this = "HIGH" (€/MWh) - DEMO: was 120
-PRICE_NORMAL_RANGE = (80, 100)  # Normal operation range
+PRICE_BUY_THRESHOLD = 85        # Below this = "BUY" (€/MWh) - DEMO: lowered for testing
+PRICE_HIGH_THRESHOLD = 95       # Above this = "HIGH" (€/MWh) - DEMO: lowered for testing
+PRICE_NORMAL_RANGE = (85, 95)   # Normal operation range
 
 # German Regions to Monitor
 GERMAN_REGIONS = [
@@ -45,16 +43,17 @@ GERMAN_REGIONS = [
 # Database
 DATABASE_FILE = "germany_energy_prices.db"
 
-# Email Configuration ✅ CONFIGURED WITH YOUR GMAIL
-SEND_EMAILS = True  # ✅ ENABLED - WILL SEND REAL EMAILS
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
-EMAIL_FROM = "zahra.areyhan@gmail.com"
-EMAIL_PASSWORD = "imbc ewqy nbdm edf"  # ✅ YOUR APP PASSWORD
+# ============================================================
+# EMAIL CONFIGURATION - SENDGRID
+# ============================================================
 
-# Email Recipients
-EMAIL_PROCUREMENT = "zahra.areyhan@gmail.com"  # ✅ YOUR EMAIL
-EMAIL_OPERATIONS = "zahra.areyhan@gmail.com"   # ✅ YOUR EMAIL
+SEND_EMAILS = True  # ✅ ENABLED - WILL SEND REAL EMAILS
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")  # ✅ READ FROM ENVIRONMENT VARIABLE (SECURE)
+SENDGRID_API_URL = "https://api.sendgrid.com/v3/mail/send"
+
+EMAIL_FROM = "zahra.areyhan@gmail.com"  # ✅ FROM EMAIL
+EMAIL_PROCUREMENT = "abdi.reyhan@gmail.com"  # ✅ RECIPIENT EMAIL (changed)
+EMAIL_OPERATIONS = "abdi.reyhan@gmail.com"   # ✅ RECIPIENT EMAIL (changed)
 
 # Logging
 LOG_FILE = "germany_energy_monitor.log"
@@ -175,16 +174,20 @@ def analyze_price(price):
         return "NORMAL"
 
 # ============================================================
-#                  SEND EMAIL ALERT
+#                  SEND EMAIL ALERT - SENDGRID
 # ============================================================
 
 def send_email_alert(decision, price, region):
     """
-    Send email alert to procurement or operations team
+    Send email alert using SendGrid API
     """
     
     if decision == "NORMAL":
         logger.info("ℹ️  No alert needed (price is normal)")
+        return False
+    
+    if not SENDGRID_API_KEY:
+        logger.error("❌ SENDGRID_API_KEY not set in environment variables!")
         return False
     
     try:
@@ -240,22 +243,38 @@ Energieüberwachungssystem - Automatische Benachrichtigung
         else:
             return False
         
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_FROM
-        msg['To'] = recipient
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        # SendGrid API payload
+        message = {
+            "personalizations": [
+                {
+                    "to": [{"email": recipient}]
+                }
+            ],
+            "from": {"email": EMAIL_FROM},
+            "subject": subject,
+            "content": [
+                {
+                    "type": "text/plain",
+                    "value": body
+                }
+            ]
+        }
         
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
-        server.login(EMAIL_FROM, EMAIL_PASSWORD)
-        server.send_message(msg)
-        server.quit()
+        headers = {
+            "Authorization": f"Bearer {SENDGRID_API_KEY}",
+            "Content-Type": "application/json"
+        }
         
-        logger.info(f"✅ Email alert sent successfully to {recipient}")
-        logger.info(f"   Subject: {subject}")
-        logger.info(f"   Decision: {decision} at €{price:.2f}/MWh")
-        return True
+        response = requests.post(SENDGRID_API_URL, json=message, headers=headers)
+        
+        if response.status_code == 202:
+            logger.info(f"✅ Email alert sent successfully via SendGrid to {recipient}")
+            logger.info(f"   Subject: {subject}")
+            logger.info(f"   Decision: {decision} at €{price:.2f}/MWh")
+            return True
+        else:
+            logger.error(f"❌ SendGrid API error: {response.status_code} - {response.text}")
+            return False
     
     except Exception as e:
         logger.error(f"❌ Email failed: {e}")
@@ -457,8 +476,9 @@ def start_scheduler():
     logger.info(f"   🔴 HIGH Alert: > €{PRICE_HIGH_THRESHOLD}/MWh")
     logger.info(f"   🟡 NORMAL:     €{PRICE_BUY_THRESHOLD}-{PRICE_HIGH_THRESHOLD}/MWh")
     logger.info("")
-    logger.info(f"📧 Email Alerts: ✅ ENABLED")
-    logger.info(f"📬 Recipient: zahra.areyhan@gmail.com")
+    logger.info(f"📧 Email Alerts: ✅ ENABLED (SendGrid)")
+    logger.info(f"📤 From: {EMAIL_FROM}")
+    logger.info(f"📬 To: {EMAIL_PROCUREMENT}")
     logger.info("")
     
     # Initialize database
