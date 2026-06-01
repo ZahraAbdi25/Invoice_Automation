@@ -45,15 +45,16 @@ GERMAN_REGIONS = [
 # Database
 DATABASE_FILE = "germany_energy_prices.db"
 
-# Email Configuration (Optional)
-SEND_EMAILS = True  # ✅ CHANGED TO TRUE - WILL SHOW EMAIL ALERTS
+# Email Configuration ✅ CONFIGURED WITH YOUR GMAIL
+SEND_EMAILS = True  # ✅ ENABLED - WILL SEND REAL EMAILS
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
-EMAIL_FROM = "your-email@gmail.com"
-EMAIL_PASSWORD = "your-app-password"
+EMAIL_FROM = "zahra.areyhan@gmail.com"
+EMAIL_PASSWORD = "imbc ewqy nbdm edf"  # ✅ YOUR APP PASSWORD
 
-EMAIL_PROCUREMENT = "procurement@company.de"
-EMAIL_OPERATIONS = "operations@company.de"
+# Email Recipients
+EMAIL_PROCUREMENT = "zahra.areyhan@gmail.com"  # ✅ YOUR EMAIL
+EMAIL_OPERATIONS = "zahra.areyhan@gmail.com"   # ✅ YOUR EMAIL
 
 # Logging
 LOG_FILE = "germany_energy_monitor.log"
@@ -186,50 +187,55 @@ def send_email_alert(decision, price, region):
         logger.info("ℹ️  No alert needed (price is normal)")
         return False
     
-    if not SEND_EMAILS:
-        logger.info(f"📧 [DRY RUN] Email alert")
-        logger.info(f"   Region: {region}")
-        logger.info(f"   Decision: {decision}")
-        logger.info(f"   Price: €{price:.2f}/MWh")
-        return True
-    
     try:
         if decision == "BUY":
             recipient = EMAIL_PROCUREMENT
             subject = "🚨 NIEDRIGE STROMPREISE - JETZT KAUFEN!"
             body = f"""
-            Strompreis-Alarm
-            
-            Preis: €{price:.2f}/MWh
-            Status: NIEDRIG
-            Aktion: Guter Zeitpunkt zum Stromkauf!
-            
-            Region: {region}
-            Zeit: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-            
-            Bitte Einkauf veranlassen.
-            
-            ---
-            Energieüberwachungssystem
+STROMPREIS-ALARM: KAUFEMPFEHLUNG
+
+═════════════════════════════════════════════════════════════
+
+Preis: €{price:.2f}/MWh
+Status: NIEDRIG 🟢
+Aktion: Guter Zeitpunkt zum Stromkauf!
+
+Region: {region}
+Zeit: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+Schwellenwert: Unter €{PRICE_BUY_THRESHOLD}/MWh
+
+═════════════════════════════════════════════════════════════
+
+Bitte Einkauf veranlassen.
+
+---
+Energieüberwachungssystem - Automatische Benachrichtigung
             """
         
         elif decision == "HIGH":
             recipient = EMAIL_OPERATIONS
             subject = "⚠️  HOHE STROMPREISE - VERBRAUCH REDUZIEREN"
             body = f"""
-            Strompreis-Alarm
-            
-            Preis: €{price:.2f}/MWh
-            Status: HOCH
-            Aktion: Stromverbrauch wenn möglich reduzieren!
-            
-            Region: {region}
-            Zeit: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-            
-            Bitte mit Betrieb abstimmen.
-            
-            ---
-            Energieüberwachungssystem
+STROMPREIS-ALARM: REDUKTIONSEMPFEHLUNG
+
+═════════════════════════════════════════════════════════════
+
+Preis: €{price:.2f}/MWh
+Status: HOCH 🔴
+Aktion: Stromverbrauch wenn möglich reduzieren!
+
+Region: {region}
+Zeit: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+Schwellenwert: Über €{PRICE_HIGH_THRESHOLD}/MWh
+
+═════════════════════════════════════════════════════════════
+
+Bitte mit Betrieb abstimmen.
+
+---
+Energieüberwachungssystem - Automatische Benachrichtigung
             """
         else:
             return False
@@ -238,7 +244,7 @@ def send_email_alert(decision, price, region):
         msg['From'] = EMAIL_FROM
         msg['To'] = recipient
         msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
         
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.starttls()
@@ -246,16 +252,14 @@ def send_email_alert(decision, price, region):
         server.send_message(msg)
         server.quit()
         
-        logger.info(f"✅ Email alert sent to {recipient}")
+        logger.info(f"✅ Email alert sent successfully to {recipient}")
+        logger.info(f"   Subject: {subject}")
+        logger.info(f"   Decision: {decision} at €{price:.2f}/MWh")
         return True
     
     except Exception as e:
         logger.error(f"❌ Email failed: {e}")
-        logger.info(f"📧 [DEMO MODE] Would send alert email:")
-        logger.info(f"   To: {EMAIL_PROCUREMENT if decision == 'BUY' else EMAIL_OPERATIONS}")
-        logger.info(f"   Decision: {decision}")
-        logger.info(f"   Price: €{price:.2f}/MWh")
-        return True  # Still return True for demo purposes
+        return False
 
 # ============================================================
 #              LOG DATA TO DATABASE
@@ -453,7 +457,8 @@ def start_scheduler():
     logger.info(f"   🔴 HIGH Alert: > €{PRICE_HIGH_THRESHOLD}/MWh")
     logger.info(f"   🟡 NORMAL:     €{PRICE_BUY_THRESHOLD}-{PRICE_HIGH_THRESHOLD}/MWh")
     logger.info("")
-    logger.info(f"📧 Email Alerts: {'✅ ENABLED' if SEND_EMAILS else '❌ DISABLED (dry run)'}")
+    logger.info(f"📧 Email Alerts: ✅ ENABLED")
+    logger.info(f"📬 Recipient: zahra.areyhan@gmail.com")
     logger.info("")
     
     # Initialize database
